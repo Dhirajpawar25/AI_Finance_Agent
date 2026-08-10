@@ -83,6 +83,11 @@ async def telegram_webhook(request: Request) -> dict:
     from app.bot import get_application
 
     app_bot: Application = get_application()
+    # PTB v21+ requires Application.initialize() before process_update() can run.
+    # Called lazily so the first webhook request initializes once, then the flag
+    # (_initialized) keeps subsequent requests fast.
+    if not getattr(app_bot, "_initialized", False):
+        await app_bot.initialize()
     json_data = await request.json()
     update = Update.de_json(json_data, app_bot.bot)
     if update is None:
