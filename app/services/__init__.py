@@ -1,0 +1,1 @@
+"""Service layer — AI, market data, SEC, documents, integrations, tools, scheduler."""

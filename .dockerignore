@@ -1,0 +1,41 @@
+# Secrets — never copy into the image
+.env
+credentials.json
+token.json
+*.pem
+
+# Local data / databases
+data/
+*.db
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs & caches
+logs/
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Git
+.git/
+
+# Deployment configs (not needed inside the image)
+Dockerfile
+.dockerignore
+fly.toml
+render.yaml
+Procfile

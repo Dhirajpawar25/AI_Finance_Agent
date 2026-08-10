@@ -1,0 +1,40 @@
+# Render.com fallback deployment (no credit card required)
+# Free tier sleeps after ~15 min idle — pair with a cron-job.org ping to https://<app>.onrender.com/health
+#
+# Usage:
+#   1. Push this repo to GitHub and create a new "Web Service" on Render pointing at the repo.
+#   2. Set the env vars below (or use "Deploy Hooks"): Render reads this file automatically
+#      when you create a Blueprint from the repo.
+#
+# NOTE: The free tier uses SQLite on an ephemeral disk, so user data resets on redeploys.
+#       For persistence, add a Render PostgreSQL instance and set DATABASE_URL.
+
+services:
+  - type: web
+    name: ai-financial-agent
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: USE_WEBHOOK
+        value: "true"
+      - key: ENABLE_SCHEDULER
+        value: "true"
+      - key: DATA_DIR
+        value: /var/data
+      # Secrets — set these in the Render dashboard (never commit them):
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
+        # value: https://your-app.onrender.com/oauth/google/callback
+      - key: DATABASE_URL
+        sync: false
+        # Optional: postgres://... from a Render PostgreSQL instance
