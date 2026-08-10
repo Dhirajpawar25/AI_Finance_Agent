@@ -8,10 +8,28 @@ from app.config import get_settings
 
 settings = get_settings()
 
-connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
+
+def clean_database_url(raw: str) -> str:
+    """Sanitize a DATABASE_URL coming from env vars.
+
+    Dashboards and copy/paste often add surrounding double/single quotes or
+    trailing whitespace/newlines. SQLAlchemy cannot parse those, so strip them
+    here to fail-fast on the actual connection instead of a parsing error.
+    """
+    if not raw:
+        return raw
+    url = raw.strip()
+    if len(url) >= 2 and url[0] == url[-1] and url[0] in ('"', "'"):
+        url = url[1:-1]
+    return url.strip()
+
+
+database_url = clean_database_url(settings.database_url)
+
+connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
 
 engine = create_engine(
-    settings.database_url,
+    database_url,
     connect_args=connect_args,
     pool_pre_ping=True,
 )
