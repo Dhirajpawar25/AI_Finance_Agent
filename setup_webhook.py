@@ -14,6 +14,14 @@ from app.config import get_settings
 settings = get_settings()
 
 
+def _print_safe(text: str) -> None:
+    """Print text safely even on Windows consoles without emoji support (cp1252)."""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        print(text.encode("ascii", "replace").decode("ascii"))
+
+
 def register_webhook(public_url: str) -> None:
     """Set the Telegram bot webhook to the public URL."""
     if not settings.telegram_bot_token:
@@ -25,9 +33,9 @@ def register_webhook(public_url: str) -> None:
     resp = httpx.get(url, params={"url": webhook_url, "allowed_updates": '["message"]'})
     data = resp.json()
     if data.get("ok"):
-        print(f"✅ Webhook registered: {webhook_url}")
+        _print_safe(f"[OK] Webhook registered: {webhook_url}")
     else:
-        print(f"❌ Failed: {data}")
+        _print_safe(f"[FAILED] {data}")
         sys.exit(1)
 
     info_resp = httpx.get(f"https://api.telegram.org/bot{settings.telegram_bot_token}/getWebhookInfo")
