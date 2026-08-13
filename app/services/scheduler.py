@@ -154,6 +154,7 @@ async def _check_alert(db, alert: Alert) -> None:
     """Evaluate a single alert and fire if conditions are met."""
     from app.bot import send_message_to_user
     from app.services import market_data, sec_data
+    from app.models import User
 
     user = db.query(User).filter(User.id == alert.user_id).first()
     if not user:
