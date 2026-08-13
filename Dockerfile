@@ -9,9 +9,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Install system dependencies needed by some Python packages
+# libsqlite3-dev needed for SQLite support (default database)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    libsqlite3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies first (better layer caching)
