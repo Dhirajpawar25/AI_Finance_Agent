@@ -97,6 +97,23 @@ def get_conversation_context(db: Session, user: User, limit: int = 10) -> str:
     return "\n".join(parts)
 
 
+def _get_latest_document_context(db: Session, user: User) -> str | None:
+    """Get the user's most recent document text for context."""
+    from app.models import Document
+    
+    doc = (
+        db.query(Document)
+        .filter(Document.user_id == user.id)
+        .order_by(Document.created_at.desc())
+        .first()
+    )
+    if doc and doc.text_content:
+        # Truncate to avoid token limits
+        text = doc.text_content[:12000]
+        return f"USER'S LATEST DOCUMENT ({doc.filename}):\n{text}"
+    return None
+
+
 def add_message(db: Session, conv: Conversation, role: str, content: str, meta: dict | None = None) -> Message:
     msg = Message(conversation_id=conv.id, role=role, content=content, meta=meta or {})
     db.add(msg)
@@ -300,6 +317,11 @@ async def generate_reply(
     memories = get_memories(db, user)
     profile = build_user_profile(db, user, memories)
     context = conversation_context or get_conversation_context(db, user)
+
+    # Get user's latest document for context (if asking about a document)
+    document_context = _get_latest_document_context(db, user)
+    if document_context:
+        context = (context + "\n\n" if context else "") + document_context
 
     # Onboarding flow takes priority
     if not user.onboarding_complete:
