@@ -164,6 +164,9 @@ INTENT_PATTERNS: list[tuple[str, list[str]]] = [
     ("onboarding", ["start", "begin", "setup", "get started", "onboard"]),
     # ── Financial intents
     ("regional_markets", ["market in", "markets in", "how is india", "how is europe", "how is japan", "how is china", "how is the us", "hows india", "how are european", "how are asian", "news from", "economy news", "world markets", "global markets", "market news from", "indian market", "european market", "japanese market", "chinese market"]),
+    ("sector_stocks", ["sector", "industry", "stocks in", "companies in", "list of", "oil", "energy", "electricity", "power", "tech", "technology", "banking", "finance", "healthcare", "pharma", "real estate", "auto", "automobile", "fmcg", "consumer", "metals", "mining", "cement", "infrastructure", "telecom", "media", "entertainment"]),
+    ("ipo_calendar", ["ipo", "initial public offering", "upcoming ipo", "new listing", "listing date"]),
+    ("startup_funding", ["startup", "funding", "fundraise", "raised", "series a", "series b", "series c", "venture capital", "vc funding", "angel investment"]),
     ("research_guide", ["before investing", "before buying", "before i buy", "before i invest", "things to look for", "what to look for", "what should i look", "what to research", "what should i research", "how to start investing", "should i invest", "stock market tips", "how to pick stocks", "how to choose stocks", "investment guide", "investing checklist", "things to know before"]),
     ("price", ["price", "stock price", "quote", "how much is", "what is the value", "how is trading", "how is doing", "doing today", "how did do today", "what is the stock"]),
     ("news", ["news", "headlines", "what happened", "latest", "why did", "announcement"]),
@@ -357,6 +360,12 @@ async def generate_reply(
     if intent == "help" and not tickers:
         from app.services.ai import rule_based_reply
         return rule_based_reply("help")
+    if intent == "sector_stocks":
+        return await _handle_sector_stocks(text, user, db)
+    if intent == "ipo_calendar":
+        return await _handle_ipo_calendar(text, user, db)
+    if intent == "startup_funding":
+        return await _handle_startup_funding(text, user, db)
 
     # Run tools
     tool_calls = await _build_tool_calls(intent, tickers, text)
@@ -1158,6 +1167,157 @@ async def _handle_drive_request(db: Session, user: User, text: str) -> str:
         lines.append(f"• **{f.get('name')}** — {f.get('mimeType', '').split('.')[-1]} (modified {f.get('modifiedTime', '')[:10]})")
     lines.append("\nWant me to *read* one of these and give you a summary? Just tell me which one.")
     return "\n".join(lines)
+
+
+async def _handle_sector_stocks(text: str, user: User, db: Session) -> str:
+    """Return stocks in a specific sector/industry using yfinance sector data."""
+    from app.services import market_data
+    
+    # Extract sector from text
+    lowered = text.lower()
+    sector_keywords = {
+        "oil": "Energy", "energy": "Energy", "electricity": "Utilities", "power": "Utilities",
+        "tech": "Technology", "technology": "Technology", "banking": "Financial Services", 
+        "finance": "Financial Services", "healthcare": "Healthcare", "pharma": "Healthcare",
+        "real estate": "Real Estate", "auto": "Consumer Cyclical", "automobile": "Consumer Cyclical",
+        "fmcg": "Consumer Defensive", "consumer": "Consumer Defensive", "metals": "Basic Materials",
+        "mining": "Basic Materials", "cement": "Basic Materials", "infrastructure": "Industrials",
+        "telecom": "Communication Services", "media": "Communication Services", "entertainment": "Communication Services"
+    }
+    
+    sector = None
+    for keyword, sector_name in sector_keywords.items():
+        if keyword in lowered:
+            sector = sector_name
+            break
+    
+    if not sector:
+        sector = "Technology"  # default
+    
+    # Get regional market data which includes sector info
+    region = "india" if any(k in lowered for k in ("india", "nifty", "sensex", "indian")) else "us"
+    
+    try:
+        # Use yfinance to get sector data
+        import yfinance as yf
+        
+        # For Indian market, use NSE sector indices
+        if region == "india":
+            sector_tickers = {
+                "Energy": ["RELIANCE.NS", "ONGC.NS", "IOC.NS", "BPCL.NS", "GAIL.NS"],
+                "Utilities": ["NTPC.NS", "POWERGRID.NS", "TATAPOWER.NS", "ADANIPOWER.NS", "NHPC.NS"],
+                "Technology": ["TCS.NS", "INFY.NS", "WIPRO.NS", "HCLTECH.NS", "TECHM.NS"],
+                "Financial Services": ["HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "KOTAKBANK.NS", "AXISBANK.NS"],
+                "Healthcare": ["SUNPHARMA.NS", "DRREDDY.NS", "CIPLA.NS", "DIVISLAB.NS", "BIOCON.NS"],
+                "Consumer Cyclical": ["TATAMOTORS.NS", "M&M.NS", "MARUTI.NS", "BAJAJ-AUTO.NS", "HEROMOTOCO.NS"],
+                "Consumer Defensive": ["HINDUNILVR.NS", "ITC.NS", "NESTLEIND.NS", "BRITANNIA.NS", "DABUR.NS"],
+                "Basic Materials": ["TATASTEEL.NS", "JSWSTEEL.NS", "HINDALCO.NS", "VEDL.NS", "COALINDIA.NS"],
+                "Industrials": ["LT.NS", "ULTRACEMCO.NS", "SHREECEM.NS", "GRASIM.NS", "ADANIENT.NS"],
+                "Communication Services": ["BHARTIARTL.NS", "IDEA.NS", "ZEEL.NS", "SUNTV.NS", "TV18BRDCST.NS"],
+            }
+        else:
+            sector_tickers = {
+                "Energy": ["XOM", "CVX", "COP", "EOG", "SLB"],
+                "Utilities": ["NEE", "DUK", "SO", "D", "AEP"],
+                "Technology": ["AAPL", "MSFT", "GOOGL", "NVDA", "META"],
+                "Financial Services": ["JPM", "BAC", "WFC", "GS", "MS"],
+                "Healthcare": ["JNJ", "UNH", "PFE", "ABT", "MRK"],
+                "Consumer Cyclical": ["TSLA", "AMZN", "HD", "MCD", "NKE"],
+                "Consumer Defensive": ["PG", "KO", "PEP", "WMT", "COST"],
+                "Basic Materials": ["LIN", "APD", "SHW", "FCX", "NEM"],
+                "Industrials": ["CAT", "HON", "UPS", "BA", "RTX"],
+                "Communication Services": ["GOOGL", "META", "NFLX", "DIS", "VZ"],
+            }
+        
+        tickers = sector_tickers.get(sector, sector_tickers["Technology"])
+        
+        # Get prices for these tickers
+        results = []
+        for ticker in tickers[:8]:
+            try:
+                data = market_data.get_price(ticker)
+                if "error" not in data:
+                    results.append(data)
+            except Exception:
+                pass
+        
+        if not results:
+            return f"Couldn't fetch {sector} sector data for {region.upper()} market right now."
+        
+        lines = [f"🏭 **{sector} Sector — {region.upper()} Market**\n"]
+        for r in results:
+            icon = "🟢" if (r.get("pct_change") or 0) >= 0 else "🔴"
+            name = r.get("name", r.get("ticker", ""))
+            price = r.get("price", 0)
+            pct = r.get("pct_change", 0)
+            lines.append(f"{icon} **{name}** ({r['ticker']}): {price:,.2f} ({pct:+.2f}%)")
+        
+        lines.append(f"\nWant me to compare any of these, or set alerts on specific companies?")
+        return "\n".join(lines)
+        
+    except Exception as exc:
+        logger.warning("sector_stocks failed: %s", exc)
+        return f"Couldn't fetch {sector} sector data right now. Try again in a moment."
+
+
+async def _handle_ipo_calendar(text: str, user: User, db: Session) -> str:
+    """Return upcoming IPO information."""
+    lowered = text.lower()
+    region = "india" if any(k in lowered for k in ("india", "nifty", "sensex", "indian", "bse", "nse")) else "us"
+    
+    if region == "india":
+        # Indian IPO data - would need a specific API
+        return (
+            "📋 **Upcoming IPOs — India**\n\n"
+            "I don't have live IPO calendar data for Indian markets yet. "
+            "For the latest IPO info, check:\n"
+            "• **NSE India** — nseindia.com → Market Data → IPO\n"
+            "• **BSE India** — bseindia.com → Markets → IPO\n"
+            "• **Chittorgarh.com** — dedicated IPO tracking site\n"
+            "• **Moneycontrol** — IPO section\n\n"
+            "Want me to analyze a specific company that recently listed? "
+            "Just give me the name and I'll pull its financials."
+        )
+    else:
+        # US IPO data
+        return (
+            "📋 **Upcoming IPOs — US Market**\n\n"
+            "For live IPO calendars, check:\n"
+            "• **NASDAQ IPO Calendar** — nasdaq.com/market-activity/ipos\n"
+            "• **NYSE IPO Center** — nyse.com/ipo-center\n"
+            "• **Renaissance Capital** — ipohome.com\n"
+            "• **SEC EDGAR** — search for S-1 filings\n\n"
+            "Want me to analyze a recent IPO's financials? Just name the company."
+        )
+
+
+async def _handle_startup_funding(text: str, user: User, db: Session) -> str:
+    """Return startup funding information."""
+    lowered = text.lower()
+    region = "india" if any(k in lowered for k in ("india", "indian", "bangalore", "mumbai", "delhi", "chennai", "hyderabad", "pune")) else "global"
+    
+    if region == "india":
+        return (
+            "🚀 **Recent Indian Startup Funding**\n\n"
+            "I don't have live startup funding data yet. For the latest deals:\n"
+            "• **Tracxn** — tracxn.com (Indian startup database)\n"
+            "• **Inc42** — inc42.com/buzz/funding\n"
+            "• **YourStory** — yourstory.com/funding\n"
+            "• **Entrackr** — entrackr.com/category/funding\n"
+            "• **Crunchbase** — filter by India\n\n"
+            "Want me to analyze a specific startup's business model or financials? "
+            "Upload their pitch deck (PDF) and I'll break it down."
+        )
+    else:
+        return (
+            "🚀 **Recent Global Startup Funding**\n\n"
+            "For live funding data:\n"
+            "• **Crunchbase** — crunchbase.com\n"
+            "• **PitchBook** — pitchbook.com\n"
+            "• **TechCrunch** — techcrunch.com/tag/funding\n"
+            "• **CB Insights** — cbinsights.com\n\n"
+            "Want me to analyze a specific startup? Upload their deck or give me the name."
+        )
 
 
 async def _run_ai_reply(prompt: str, user: User) -> str:
