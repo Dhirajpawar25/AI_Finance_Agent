@@ -5,7 +5,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, RedirectResponse
 from pydantic import BaseModel
 
 from app.config import get_settings
@@ -101,12 +101,12 @@ async def telegram_webhook(request: Request) -> dict:
 # Google OAuth callbacks
 # ─────────────────────────────────────────────────────────────
 @app.get("/oauth/google/connect")
-async def google_connect(telegram_id: int, provider: str = "gmail") -> dict:
-    """Generate an OAuth connect URL for a user."""
+async def google_connect(telegram_id: int, provider: str = "gmail"):
+    """Redirect user to Google OAuth consent screen."""
     if not is_configured():
         raise HTTPException(status_code=503, detail="Google OAuth is not configured on this deployment.")
     url = build_auth_url(state=str(telegram_id), provider=provider)
-    return {"auth_url": url}
+    return RedirectResponse(url=url, status_code=302)
 
 
 @app.get("/oauth/google/callback")
